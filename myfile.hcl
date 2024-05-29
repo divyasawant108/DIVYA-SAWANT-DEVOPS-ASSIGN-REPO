@@ -1,0 +1,162 @@
+provider "aws" {
+  region = "ap-south-1"  # Mumbai region
+}
+resource "aws_vpc" "frist-vpc" {
+  cidr_block = "10.0.0.0/16"
+}
+resource "aws_subnet" "private_sub" {
+  vpc_id            = "frist-vpc"
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "ap-south-1a"
+}
+resource "aws_security_group" "FV_sg" {
+  vpc_id =  frist-vpc
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] #ssh
+  }
+
+  ingress {
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    security_groups = [FV_sg]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "httpd"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_security_group" "bast_sg" {
+  vpc_id = frist-vpc
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] #ssh
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"] #ACL
+  }
+}
+resource "aws_instance" "webapp" {
+  ami           = "ami-0912f71e06545ad88"  
+  instance_type = "t2.micro"
+  vpc-id        = frist-vpc
+  subnet_id     = private_subnet
+  security_groups = [FV_sg]
+  key_name      = "pem-key"
+  user_data     = <<-EOF
+                #!/bin/bash
+                 sudo su 
+                 yum update -y
+                 yum install -y nodejs npm
+                EOF
+}
+
+resource "aws_instance" "dbapp" {
+  ami           = "ami-0912f71e06545ad88"  
+  instance_type = "t3.micro"
+  vpc-id        = frist-vpc
+  subnet_id     = private_subnet
+  security_groups = [FV_sg]
+  key_name      = "pem-key"
+  user_data     = <<-EOF
+                #!/bin/bash
+                sudo su 
+                yum update -y
+                yum install -y postgresql-server postgresql-contrib
+                postgresql-setup initdb
+                systemctl start postgresql
+                systemctl enable postgresql
+                EOF
+}
+
+resource "aws_instance" "bastion" {
+  ami           = "ami-0aba92643213491b9"  
+  instance_type = "t2.micro"
+  VPC_id        =  frist-vpc
+  subnet_id     = private_subnet
+  security_groups = [bast_sg]
+  key_name      = "pem-key"
+  user_data     = <<-EOF
+                #!/bin/bash
+                sudo su 
+                yum update -y
+                yum install -y openssh-server
+                EOF
+}
+
+resource "aws_lb" "web_load-bla" {
+  name               = "web-load-bla"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [FV_sg]
+  subnets            = [private_sub]
+}
+
+resource "aws_lb_target_group" "web_tg" {
+  name     = "web-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.frist-vpc.id
+}
+
+resource "aws_lb_listener" "web_listener" {
+  load_balancer_arn = aws_load-bla.web_lb.arn
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web_tg.arn
+  }
+}
+
+resource "aws_lb_target_group_attachment" "web_instance" {
+  target_group_arn = aws_lb_target_group.web_tg.arn
+  target_id        = aws_instance.web.id
+  port             = 80
+}
+
+resource "aws_route53_zone" "zone-1" {
+  name = "web.com"
+}
+
+resource "aws_route53_record" "web" {
+  zone_id = aws_route53_zone-1
+  name    = "web.com"
+  type    = "A"
+  alias {
+    name                   = aws_lb.web_lb.web.com
+    zone_id                = aws_lb.web_lb.zone-1
+    evaluate_target_health = true
+  }
+}
+
+
+
+
+
+
+
+
+
