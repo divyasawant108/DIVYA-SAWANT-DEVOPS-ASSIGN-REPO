@@ -1,0 +1,9 @@
+In the terrafrom file for creating a infrastructure automatically I used following step : 
+1 assign the region and providers 
+2 create a VPC using VPC resources which is private 
+3 subnetting. Using subnet resource in AWS
+4 updating routes table and nat and internet gateway for communication 
+5 vpc set-up is done then creating security group and ncal for firewall traffic management using security group resources in AWS
+6 creating two instances one for web and anthor one for db application.
+7 download python and posterspl on in instance 
+8 creating a load balancer and DNS using route 53
